@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next'
-import { google } from 'googleapis'
+import { google, youtube_v3, customsearch_v1 } from 'googleapis'
 
 const youtube = google.youtube({
   version: 'v3',
@@ -47,16 +47,16 @@ async function searchYouTube(term: string): Promise<SearchResult[]> {
     maxResults: 10,
   })
 
-  return response.data.items?.map((item: { id: { videoId: string }, snippet: { title: string, description: string } }) => ({
-    id: item.id.videoId,
-    title: item.snippet.title,
-    description: item.snippet.description,
-    link: `https://www.youtube.com/watch?v=${item.id.videoId}`,
+  return (response.data.items || []).map((item: youtube_v3.Schema$SearchResult) => ({
+    id: item.id?.videoId || '',
+    title: item.snippet?.title || '',
+    description: item.snippet?.description || '',
+    link: `https://www.youtube.com/watch?v=${item.id?.videoId || ''}`,
     type: 'youtube' as const,
     views: 0,
     likes: 0,
     relevance: 0,
-  })) || []
+  }))
 }
 
 async function searchWeb(term: string): Promise<SearchResult[]> {
@@ -67,18 +67,18 @@ async function searchWeb(term: string): Promise<SearchResult[]> {
     num: 10,
   })
 
-  return response.data.items?.map((item: { cacheId: string, title: string, snippet: string, link: string }) => ({
-    id: item.cacheId,
-    title: item.title,
-    description: item.snippet,
-    link: item.link,
+  return (response.data.items || []).map((item: customsearch_v1.Schema$Result) => ({
+    id: item.cacheId || item.link || '',
+    title: item.title || '',
+    description: item.snippet || '',
+    link: item.link || '',
     type: determineContentType(item),
     relevance: 0,
-  })) || []
+  }))
 }
 
-function determineContentType(item: { link: string, pagemap?: { metatags?: [{ 'og:type'?: string }] } }): 'academic' | 'article' | 'blog' {
-  if (item.link.includes('scholar.google.com') || item.link.includes('.edu')) {
+function determineContentType(item: customsearch_v1.Schema$Result): 'academic' | 'article' | 'blog' {
+  if (item.link?.includes('scholar.google.com') || item.link?.includes('.edu')) {
     return 'academic'
   } else if (item.pagemap?.metatags?.[0]?.['og:type'] === 'article') {
     return 'article'
